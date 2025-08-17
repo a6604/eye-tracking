@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>واجهة التحكم بالعين (موبايل + كمبيوتر)</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f5f5f7;
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(to right, #007AFF, #34C759);
+      color: white;
+      text-align: center;
+      padding: 15px;
+      font-size: 1.3rem;
+    }
+    .apps-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 10px;
+    }
+    .app-icon {
+      text-align: center;
+      padding: 10px;
+      border-radius: 15px;
+      background: white;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      transition: 0.2s;
+    }
+    .app-icon .icon {
+      font-size: 2rem;
+      padding: 20px;
+      border-radius: 15px;
+      margin-bottom: 10px;
+      color: white;
+      display: inline-block;
+    }
+    .app-icon.selected {
+      transform: scale(1.1);
+      background: rgba(0,122,255,0.1);
+    }
+    .eye-pointer {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+      background: rgba(0,122,255,0.6);
+      border-radius: 50%;
+      border: 2px solid white;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 999;
+    }
+    video { display: none; }
+    canvas { display: none; }
+  </style>
+</head>
+<body>
+  <div class="header">👁️ التحكم بالعين (موبايل + كمبيوتر)</div>
+
+  <div class="apps-grid" id="appsGrid"></div>
+  <div class="eye-pointer" id="eyePointer"></div>
+
+  <!-- مكتبة Mediapipe -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+  <video id="video" autoplay playsinline></video>
+  <canvas id="output"></canvas>
+
+  <script>
+    const eyePointer = document.getElementById("eyePointer");
+    const appsGrid = document.getElementById("appsGrid");
+
+    let selectedApp = null;
+
+    // التطبيقات
+    const apps = [
+      { name: "📞 المكالمات", color: "#34C759" },
+      { name: "💬 الرسائل", color: "#007AFF" },
+      { name: "📷 الكاميرا", color: "#5856D6" },
+      { name: "🖼️ الصور", color: "#FF2D55" },
+      { name: "🎵 الموسيقى", color: "#AF52DE" },
+      { name: "⚙️ الإعدادات", color: "#8E8E93" }
+    ];
+
+    apps.forEach(app => {
+      const el = document.createElement("div");
+      el.className = "app-icon";
+      el.innerHTML = `<div class="icon" style="background:${app.color}">${app.name.split(" ")[0]}</div><div>${app.name.split(" ")[1]}</div>`;
+      appsGrid.appendChild(el);
+    });
+
+    // Mediapipe FaceMesh
+    const videoElement = document.getElementById('video');
+    const canvasElement = document.getElementById('output');
+    const canvasCtx = canvasElement.getContext('2d');
+
+    const faceMesh = new FaceMesh({locateFile: (file) => {
+      return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+    }});
+
+    faceMesh.setOptions({
+      maxNumFaces: 1,
+      refineLandmarks: true,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+
+    faceMesh.onResults((results) => {
+      if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) return;
+      const landmarks = results.multiFaceLandmarks[0];
+
+      // نقطة وسط بين العينين (كـ مؤشر النظر)
+      const eyeX = (landmarks[33].x + landmarks[263].x) / 2 * window.innerWidth;
+      const eyeY = (landmarks[33].y + landmarks[263].y) / 2 * window.innerHeight;
+
+      eyePointer.style.left = eyeX + "px";
+      eyePointer.style.top = eyeY + "px";
+
+      // تحديد التطبيق اللي المؤشر عليه
+      const appElements = document.querySelectorAll(".app-icon");
+      let newSelectedApp = null;
+      appElements.forEach(app => {
+        const rect = app.getBoundingClientRect();
+        if (eyeX >= rect.left && eyeX <= rect.right && eyeY >= rect.top && eyeY <= rect.bottom) {
+          newSelectedApp = app;
+        }
+        app.classList.remove("selected");
+      });
+      if (newSelectedApp) {
+        newSelectedApp.classList.add("selected");
+        selectedApp = newSelectedApp;
+      } else {
+        selectedApp = null;
+      }
+    });
+
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await faceMesh.send({image: videoElement});
+      },
+      width: 640,
+      height: 480
+    });
+    camera.start();
+
+    // تنفيذ الإجراء (Space أو لمسة شاشة)
+    document.addEventListener("keydown", e => {
+      if (e.code === "Space" && selectedApp) {
+        alert("فتح تطبيق: " + selectedApp.textContent.trim());
+      }
+    });
+
+    document.addEventListener("click", () => {
+      if (selectedApp) {
+        alert("فتح تطبيق: " + selectedApp.textContent.trim());
+      }
+    });
+  </script>
+</body>
+</html>
